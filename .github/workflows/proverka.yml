@@ -1,0 +1,67 @@
+# Проверка установки на чистых Windows и Mac - тем же путём, что в README и УСТАНОВКА.md.
+name: Проверка установки
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  ustanovka:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      # Пока репозиторий закрыт - архив с ключом проверки. Распаковка та же, что в README.
+      - name: uv и программа по README (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+          & "$HOME\.local\bin\uv.exe" --version
+          Invoke-WebRequest -Headers @{Authorization = "Bearer $env:GH_TOKEN"} https://api.github.com/repos/${{ github.repository }}/zipball/${{ github.sha }} -OutFile "$env:TEMP\avtopilot.zip"
+          Expand-Archive "$env:TEMP\avtopilot.zip" -DestinationPath "$env:TEMP\ap" -Force
+          Move-Item (Get-ChildItem "$env:TEMP\ap" -Directory)[0].FullName "$HOME\avtopilot"
+          Get-ChildItem "$HOME\avtopilot" | Select-Object Name
+
+      - name: uv и программа по README (Mac)
+        if: runner.os == 'macOS'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          ~/.local/bin/uv --version
+          gh api repos/${{ github.repository }}/zipball/${{ github.sha }} > /tmp/avtopilot.zip
+          mkdir /tmp/ap && ditto -x -k /tmp/avtopilot.zip /tmp/ap && mv /tmp/ap/* ~/avtopilot
+          ls ~/avtopilot
+
+      - name: Команда из AGENTS.md в PowerShell - русские буквы читаются
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          [Console]::OutputEncoding = [Text.Encoding]::UTF8; & "$HOME\.local\bin\uv.exe" run --no-project --python 3.12 "$HOME\avtopilot\ap.py" pomosh | Out-File -Encoding utf8 "$env:TEMP\pomosh.txt"
+          & "$HOME\.local\bin\uv.exe" run --no-project --python 3.12 "$HOME\avtopilot\proverki\kodirovka.py" "$env:TEMP\pomosh.txt"
+          exit $LASTEXITCODE
+
+      - name: Команда из AGENTS.md в Git Bash - так работает Claude Code на Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          ~/.local/bin/uv.exe run --no-project --python 3.12 ~/avtopilot/ap.py pomosh > ~/pomosh-bash.txt
+          grep -q "sozdat" ~/pomosh-bash.txt
+          ~/.local/bin/uv.exe run --no-project --python 3.12 ~/avtopilot/proverki/kodirovka.py ~/pomosh-bash.txt
+
+      - name: Установка по шагам без входа в hh (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          & "$HOME\.local\bin\uv.exe" run --no-project --python 3.12 "$HOME\avtopilot\proverki\test_ustanovka.py"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Установка по шагам без входа в hh (Mac)
+        if: runner.os == 'macOS'
+        run: ~/.local/bin/uv run --no-project --python 3.12 ~/avtopilot/proverki/test_ustanovka.py

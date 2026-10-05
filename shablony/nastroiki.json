@@ -1,0 +1,19 @@
+{
+ "imya": "",
+ "rezume_id": "",
+ "bloki": [],
+ "format_raboty": ["REMOTE"],
+ "regiony": [],
+ "opyt": "",
+ "zarplata_ot": null,
+ "valyuta": "RUR",
+ "stop_slova": [],
+ "otklikov_v_den": 40,
+ "vremya_zakhodov": ["09:10", "16:00"],
+ "vremya_otcheta": "09:00",
+ "rezhim_ii": "izvestnoe_sam",
+ "stranits": 3,
+ "na_stranitse": 50,
+ "pauza_mezhdu_blokami_sek": 90,
+ "anketa": {}
+}
