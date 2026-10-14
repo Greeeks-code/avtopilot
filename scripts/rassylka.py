@@ -89,7 +89,10 @@ def main(proba=None):
         pisat_log(out)
         b = {"nazvanie": blok["nazvanie"], "otpravleno": out.count("📨"),
              "kapcha": out.count("Требуется капча"),
-             "oshibki": out.count("Traceback") + out.count("[E]")}
+             # капча даёт ещё две строки [E] («API-ключ не задан») - это не отдельные
+             # ошибки, иначе человек видит «ошибок 4» там, где была только капча
+             "oshibki": out.count("Traceback") + sum(
+                 1 for s in out.splitlines() if "[E]" in s and "API-ключ" not in s)}
         itog["bloki"].append(b)
         for k in ("otpravleno", "kapcha", "oshibki"):
             itog[k] += b[k]

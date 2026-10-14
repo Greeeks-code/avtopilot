@@ -1,7 +1,7 @@
 # Команды для установки и проверки. ИИ вызывает их по УСТАНОВКА.md.
 import sys, json, re, shutil, platform, subprocess, datetime
 from pathlib import Path
-from common import (KOD, SHABLONY, DANNYE, NASTROIKI, LOG, ISTORIYA, VERSIYA, HH_VERSIYA, MAC, WIN,
+from common import (KOD, SCRIPTS, SHABLONY, DANNYE, NASTROIKI, LOG, ISTORIYA, VERSIYA, HH_VERSIYA, MAC, WIN,
                     ENV, BEZ_OKNA, uv_bin, hh, hh_komanda, api, zagruzit, zapros_bloka, filtry_poiska,
                     proverit_pismo)
 
@@ -78,7 +78,15 @@ def vhod():
     """Откроется окно браузера с hh - человек входит сам. Пароль ИИ не видит."""
     print("Сейчас откроется окно hh.ru. Войди как обычно: телефон или почта, код из SMS.")
     print("Окно закроется само после входа. Ждём до 10 минут.")
-    subprocess.run(hh_komanda("authorize", "--no-headless"), env=ENV, timeout=600, **BEZ_OKNA)
+    # --manual: без него инструмент до открытия окна ждёт email в консоли, а консоли
+    # у ИИ нет - окно не открывалось, всё висело 10 минут (Windows, 13.10.2026).
+    # stdin=DEVNULL: если инструмент снова что-то спросит, он упадёт сразу, а не повиснет.
+    komanda = [uv_bin(), "tool", "run", "--from", f"hh-applicant-tool[playwright]=={HH_VERSIYA}",
+               "python", str(SCRIPTS / "vhod_okno.py"), "-c", str(DANNYE / "hh"), "authorize", "--manual"]
+    try:
+        subprocess.run(komanda, env=ENV, timeout=600, stdin=subprocess.DEVNULL, **BEZ_OKNA)
+    except subprocess.TimeoutExpired:
+        print("За 10 минут вход не завершился.")
     me = api("/me")
     if me.get("id"):
         print(f"Вход выполнен: {me.get('first_name', '')} {me.get('last_name', '')}")
@@ -123,8 +131,14 @@ def rezume_pokazat(rid):
     for e in r.get("experience") or []:
         print(f"- {e.get('start')} - {e.get('end') or 'сейчас'} | {e.get('company')} | {e.get('position')}")
         print(f"  {(e.get('description') or '')[:400]}")
-    for e in (r.get("education") or {}).get("primary") or []:
+    # Уровень печатаем всегда: «Среднее» без вузов при высшем в жизни - дыра,
+    # которую без этой строки не видно (13.10.2026).
+    obr = r.get("education") or {}
+    print(f"\nОбразование, уровень: {(obr.get('level') or {}).get('name') or 'не указан'}")
+    for e in obr.get("primary") or []:
         print(f"Образование: {e.get('name')}, {e.get('organization') or ''} {e.get('year') or ''}")
+    if not obr.get("primary"):
+        print("Вузов в резюме нет.")
 
 
 def rezume_sozdat(argumenty):
@@ -185,10 +199,14 @@ def dlya_avtora():
             if re.search(r"\[E\]|\[W\]|Traceback|Error|ошибк|капч|ИТОГ|запуск|конец", s, re.I):
                 stroki.append(f"{p.stem}: {s}")
     tekst = "\n".join(stroki[-60:])
+    tekst = re.sub(r"\x1b\[[0-9;]*m", "", tekst)   # коды цвета из вывода hh - в отчёте мусор
     # вычищаем то, что может указать на человека или дать доступ
     tekst = re.sub(r"(state|token|code|key)=[^\s&]+", r"\1=***", tekst, flags=re.I)
     tekst = re.sub(r"https?://hh\.ru/resume/\w+", "hh.ru/resume/***", tekst)
-    tekst = re.sub(r"\+?\d[\d\s\-()]{9,}\d", "***", tekst)
+    # Телефон - без перевода строки и не дата: прежнее правило склеивало строки
+    # и съедало числа («ошибок ***: === ***:16 конец ===», 13.10.2026).
+    tekst = re.sub(r"(?<![\d-])\+?\d[\d \-()]{9,}\d(?![\d:])", lambda m: m[0] if re.fullmatch(
+        r"\d{4}-\d\d-\d\d( \d\d)?", m[0]) else "***", tekst)
     tekst = re.sub(r"[\w.+-]+@[\w-]+\.[\w.]+", "***@***", tekst)
     sost = DANNYE / "СОСТОЯНИЕ.txt"
     khod = DANNYE / "ХОД-УСТАНОВКИ.md"

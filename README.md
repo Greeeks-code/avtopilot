@@ -137,20 +137,28 @@
 Программа должна оказаться в `~/avtopilot` (Windows: `$HOME\avtopilot`).
 На Mac - не в Desktop, Documents или Downloads: расписание туда не пускают.
 
+Папку программы не удаляем: блок с рекурсивным удалением Claude Code на
+Windows отклоняет целиком (13.10.2026). Скачиваем в новую временную папку.
+
 Mac (Терминал). Распаковывать через `ditto`, не `unzip`: unzip на Mac
 портит русские имена файлов.
 ```
 curl -L -o /tmp/avtopilot.zip https://github.com/Greeeks-code/avtopilot/archive/refs/heads/main.zip
-rm -rf /tmp/avtopilot-main && ditto -x -k /tmp/avtopilot.zip /tmp && rm -rf ~/avtopilot && mv /tmp/avtopilot-main ~/avtopilot
+rm -rf /tmp/avtopilot-main && ditto -x -k /tmp/avtopilot.zip /tmp
+[ -e ~/avtopilot ] || mv /tmp/avtopilot-main ~/avtopilot
 ```
 
 Windows (PowerShell):
 ```
-Invoke-WebRequest https://github.com/Greeeks-code/avtopilot/archive/refs/heads/main.zip -OutFile "$env:TEMP\avtopilot.zip"
-Expand-Archive "$env:TEMP\avtopilot.zip" -DestinationPath $env:TEMP -Force
-Remove-Item "$HOME\avtopilot" -Recurse -Force -ErrorAction SilentlyContinue
-Move-Item "$env:TEMP\avtopilot-main" "$HOME\avtopilot"
+$T = Join-Path $env:TEMP ("avtopilot-" + (Get-Random)); New-Item -ItemType Directory $T | Out-Null
+Invoke-WebRequest https://github.com/Greeeks-code/avtopilot/archive/refs/heads/main.zip -OutFile "$T\avtopilot.zip"
+Expand-Archive "$T\avtopilot.zip" -DestinationPath $T; $T
+if (-not (Test-Path "$HOME\avtopilot")) { Move-Item "$T\avtopilot-main" "$HOME\avtopilot" }
 ```
+
+Если `~/avtopilot` уже была (прошлая попытка) - сравни файл `VERSION` в ней
+и в новой `avtopilot-main` во временной папке. Совпадает - оставь как есть.
+Отличается - старую переименуй в `avtopilot-staraya`, новую перенеси на её место.
 
 Если человек дал не ссылку, а папку или архив avtopilot.zip - скопируй
 или распакуй так, чтобы получилось `~/avtopilot` с файлом `ap.py` внутри.
